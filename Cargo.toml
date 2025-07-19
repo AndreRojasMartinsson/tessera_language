@@ -26,6 +26,7 @@ log = "0.4.27"
 match_deref = "0.1.2"
 memmap2 = "0.9.7"
 pretty_assertions = "1.4.1"
+rayon = "1.10.0"
 string_cache = "0.8.9"
 
 [dev-dependencies]

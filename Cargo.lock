@@ -953,6 +953,7 @@ dependencies = [
  "match_deref",
  "memmap2",
  "pretty_assertions",
+ "rayon",
  "string_cache",
  "string_cache_codegen",
 ]
