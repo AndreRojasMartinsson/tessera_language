@@ -54,12 +54,8 @@ node!(ImportItem, {
 choice!(ImportTree, {
     Path(Box<'a, ImportPath<'a>>),
     Group(Box<'a, ImportGroup<'a>>),
-    Name(Box<'a, ImportName<'a>>),
+    Name(Box<'a, Identifier<'a>>),
     Glob
-});
-
-node!(ImportName, {
-    ident: Identifier<'a>,
 });
 
 node!(ImportGroup, {
