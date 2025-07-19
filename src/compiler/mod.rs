@@ -9,7 +9,7 @@ pub mod token;
 #[macro_export]
 macro_rules! node {
     ($name:ident $(< $($generic:ident),* >)? , { $( $(#[$doc:meta])* $field:ident: $ty:ty),* $(,)? }) => {
-        #[derive(Debug, PartialEq, PartialOrd, Clone)]
+        #[derive(Debug, PartialEq, PartialOrd)]
         pub struct $name<'a $(, $($generic),* )?> {
             pub loc: $crate::span::Span,
             pub _marker: std::marker::PhantomData<&'a str>,
@@ -29,13 +29,16 @@ macro_rules! node {
         }
     };
 }
+
 #[macro_export]
 macro_rules! choice {
     ($name:ident, { $( $(#[$doc:meta])* $member:ident $(($ty:ty))? ),* $(,)? }) => {
-        #[derive(Debug, PartialEq, PartialOrd, Clone)]
+        #[derive(Debug, PartialEq, PartialOrd)]
         pub enum $name<'a> {
             $( $(#[$doc])* $member $( ( $ty ) )?, )*
             Marker(std::marker::PhantomData::<&'a str>)
         }
+
+
     };
 }

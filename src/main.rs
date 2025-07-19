@@ -1,8 +1,9 @@
 use core::str;
 use std::{fs::File, path::PathBuf};
 
+use bumpalo::Bump;
 use clap::Parser;
-use codespan_reporting::files::{Files, SimpleFiles};
+use codespan_reporting::files::SimpleFiles;
 use color_eyre::eyre::{Context, Result, ensure};
 use memmap2::Mmap;
 use tessera_language::{lexer::Lexer, parser};
@@ -45,7 +46,9 @@ fn main() -> Result<()> {
 
     let file_id = files.add(path.file_name().and_then(|s| s.to_str()).unwrap(), source);
 
-    let mut parser = parser::Parser::new(source, lexer, files, file_id);
+    let arena = Bump::new();
+
+    let mut parser = parser::Parser::new(&arena, source, lexer, files, file_id);
 
     let source_node = parser.parse().context("Failed to parse file")?;
 

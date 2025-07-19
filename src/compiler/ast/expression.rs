@@ -1,6 +1,9 @@
 use bitflags::bitflags;
 use clap::Id;
 
+use bumpalo::boxed::Box;
+use bumpalo::collections::Vec;
+
 use crate::{
     atoms::KwAtom,
     choice, node,
@@ -26,7 +29,7 @@ bitflags! {
 }
 
 node!(SourceFile, {
-    stmts: Vec<Stmt<'a>>,
+    stmts: Vec<'a, Stmt<'a>>,
 });
 
 choice!(Stmt, {
@@ -36,11 +39,11 @@ choice!(Stmt, {
 });
 
 choice!(DeclStmt, {
-    Const(Box<ConstItem<'a>>),
-    Empty(Box<EmptyStmt<'a>>),
-    Func(Box<FuncItem<'a>>),
-    Extern(Box<ExternFunc<'a>>),
-    Var(Box<VarItem<'a>>),
+    Const(Box<'a, ConstItem<'a>>),
+    Empty(Box<'a, EmptyStmt<'a>>),
+    Func(Box<'a, FuncItem<'a>>),
+    Extern(Box<'a, ExternFunc<'a>>),
+    Var(Box<'a, VarItem<'a>>),
 });
 
 node!(EmptyStmt, {});
@@ -70,9 +73,9 @@ node!(FuncItem, {
 });
 
 choice!(Parameter, {
-    Ident(Box<IdentParameter<'a>>),
-    SelfParam(Box<SelfParameter<'a>>),
-    Variadic(Box<VariadicParameter<'a>>),
+    Ident(Box<'a, IdentParameter<'a>>),
+    SelfParam(Box<'a, SelfParameter<'a>>),
+    Variadic(Box<'a, VariadicParameter<'a>>),
 });
 
 node!(VariadicParameter, {
@@ -98,22 +101,22 @@ node!(VarItem, {
 });
 
 choice!(ExprStmt, {
-    Expr(Box<Expr<'a>>),
-    ExprEndingWithBlock(Box<ExprEndingWithBlock<'a>>),
+    Expr(Box<'a, Expr<'a>>),
+    ExprEndingWithBlock(Box<'a, ExprEndingWithBlock<'a>>),
 });
 
 choice!(ExprEndingWithBlock, {
-    Block(Box<Block<'a>>),
-    If(Box<IfExpr<'a>>),
-    Match(Box<MatchExpr<'a>>),
-    While(Box<WhileExpr<'a>>),
-    For(Box<ForExpr<'a>>),
-    ForIn(Box<ForInExpr<'a>>),
+    Block(Box<'a, Block<'a>>),
+    If(Box<'a, IfExpr<'a>>),
+    Match(Box<'a, MatchExpr<'a>>),
+    While(Box<'a, WhileExpr<'a>>),
+    For(Box<'a, ForExpr<'a>>),
+    ForIn(Box<'a, ForInExpr<'a>>),
 });
 
 node!(Block, {
     label: Option<Label<'a>>,
-    stmts: Vec<Stmt<'a>>,
+    stmts: Vec<'a, Stmt<'a>>,
     expr: Option<Expr<'a>>,
 });
 
@@ -122,8 +125,8 @@ node!(Label, {
 });
 
 choice!(ElseClause, {
-    Block(Box<Block<'a>>),
-    If(Box<IfExpr<'a>>),
+    Block(Box<'a, Block<'a>>),
+    If(Box<'a, IfExpr<'a>>),
 });
 
 node!(IfExpr, {
@@ -161,14 +164,14 @@ node!(ArmGuard, {
 });
 
 choice!(Pattern, {
-    Lit(Box<LitPat<'a>>),
-    Ident(Box<Identifier<'a>>),
-    Name(Box<NameExpr<'a>>),
-    Ref(Box<RefPattern<'a>>),
-    Reference(Box<ReferencePattern<'a>>),
-    Mut(Box<MutPattern<'a>>),
-    Range(Box<RangePattern<'a>>),
-    Or(Box<OrPattern<'a>>),
+    Lit(Box<'a, LitPat<'a>>),
+    Ident(Box<'a, Identifier<'a>>),
+    Name(Box<'a, NameExpr<'a>>),
+    Ref(Box<'a, RefPattern<'a>>),
+    Reference(Box<'a, ReferencePattern<'a>>),
+    Mut(Box<'a, MutPattern<'a>>),
+    Range(Box<'a, RangePattern<'a>>),
+    Or(Box<'a, OrPattern<'a>>),
     Ignore
 });
 
@@ -196,8 +199,8 @@ node!(MutPattern, {
 });
 
 choice!(RangePatternKind, {
-    To(Box<RangeToPattern<'a>>),
-    Full(Box<RangeFullPattern<'a>>),
+    To(Box<'a, RangeToPattern<'a>>),
+    Full(Box<'a, RangeFullPattern<'a>>),
 });
 
 node!(RangeToPattern, {
@@ -211,12 +214,12 @@ node!(RangeFullPattern, {
 });
 
 choice!(LitPat, {
-    Str(Box<StrLiteral<'a>>),
-    Char(Box<CharLiteral<'a>>),
-    Bool(Box<BoolLiteral<'a>>),
-    Float(Box<FloatLiteral<'a>>),
-    Int(Box<IntLiteral<'a>>),
-    Neg(Box<NegativeLiteral<'a>>),
+    Str(Box<'a, StrLiteral<'a>>),
+    Char(Box<'a, CharLiteral<'a>>),
+    Bool(Box<'a, BoolLiteral<'a>>),
+    Float(Box<'a, FloatLiteral<'a>>),
+    Int(Box<'a, IntLiteral<'a>>),
+    Neg(Box<'a, NegativeLiteral<'a>>),
 });
 
 node!(WhileExpr, {
@@ -242,20 +245,20 @@ node!(ForInExpr, {
 });
 
 choice!(ExprWithoutRange, {
-    Name(Box<NameExpr<'a>>),
-    Unary(Box<UnaryExpr<'a>>),
-    Reference(Box<RefExpr<'a>>),
-    Binary(Box<BinaryExpr<'a>>),
-    Assignment(Box<AssignmentExpr<'a>>),
-    CompoundAssignment(Box<CompoundAssignmentExpr<'a>>),
-    TypeCast(Box<TypeCastExpr<'a>>),
-    Call(Box<CallExpr<'a>>),
-    Return(Box<ReturnExpr<'a>>),
-    Literal(Box<Literal<'a>>),
-    Break(Box<BreakExpr<'a>>),
-    Continue(Box<ContinueExpr<'a>>),
-    Paren(Box<Expr<'a>>),
-    EndingWithBlock(Box<ExprEndingWithBlock<'a>>),
+    Name(Box<'a, NameExpr<'a>>),
+    Unary(Box<'a, UnaryExpr<'a>>),
+    Reference(Box<'a, RefExpr<'a>>),
+    Binary(Box<'a, BinaryExpr<'a>>),
+    Assignment(Box<'a, AssignmentExpr<'a>>),
+    CompoundAssignment(Box<'a, CompoundAssignmentExpr<'a>>),
+    TypeCast(Box<'a, TypeCastExpr<'a>>),
+    Call(Box<'a, CallExpr<'a>>),
+    Return(Box<'a, ReturnExpr<'a>>),
+    Literal(Box<'a, Literal<'a>>),
+    Break(Box<'a, BreakExpr<'a>>),
+    Continue(Box<'a, ContinueExpr<'a>>),
+    Paren(Box<'a, Expr<'a>>),
+    EndingWithBlock(Box<'a, ExprEndingWithBlock<'a>>),
     SelfExpr,
 });
 
@@ -311,9 +314,9 @@ node!(ReturnExpr, {
 });
 
 choice!(RangeExpr, {
-    From(Box<RangeFromExpr<'a>>),
-    To(Box<RangeToExpr<'a>>),
-    Full(Box<RangeFullExpr<'a>>),
+    From(Box<'a, RangeFromExpr<'a>>),
+    To(Box<'a, RangeToExpr<'a>>),
+    Full(Box<'a, RangeFullExpr<'a>>),
 });
 
 node!(RangeFromExpr, {
@@ -330,8 +333,8 @@ node!(RangeFullExpr, {
 });
 
 choice!(Expr, {
-    ExceptRange(Box<ExprWithoutRange<'a>>),
-    Range(Box<RangeExpr<'a>>)
+    ExceptRange(Box<'a, ExprWithoutRange<'a>>),
+    Range(Box<'a, RangeExpr<'a>>)
 });
 
 node!(Identifier, {
@@ -340,11 +343,11 @@ node!(Identifier, {
 
 choice!(NameExpr, {
     /// e.g. `std:io`
-    Path(Path<'a>),
+    Path(Box<'a, Path<'a>>),
     /// e.g. `<base>.member` - where `base` is *itself* another NameExpr
-    Field(Field<'a>),
+    Field(Box<'a, Field<'a>>),
     /// e.g. `base`
-    Ident(Identifier<'a>),
+    Ident(Box<'a, Identifier<'a>>),
 });
 
 node!(Field, {
@@ -353,8 +356,8 @@ node!(Field, {
 });
 
 choice!(FieldBase, {
-    Ident(Box<Identifier<'a>>),
-    Field(Box<Field<'a>>),
+    Ident(Box<'a, Identifier<'a>>),
+    Field(Box<'a, Field<'a>>),
 });
 
 node!(Path, {
@@ -368,7 +371,7 @@ node!(PathSegment, {
 
 choice!(PathArguments, {
     None,
-    Generic(GenericArgs<'a>)
+    Generic(Box<'a, GenericArgs<'a>>)
 });
 
 node!(GenericArgs, {
@@ -376,7 +379,7 @@ node!(GenericArgs, {
 });
 
 choice!(GenericArg, {
-    Ty(Type<'a>),
+    Ty(Box<'a, Type<'a>>),
 });
 
 node!(Type, {
@@ -388,14 +391,14 @@ node!(TypePath, {
 });
 
 node!(TypePathSegment, {
-    ty: Ty<'a>,
+    ty: Box<'a, Ty<'a>>,
 });
 
 choice!(Ty, {
-    Ptr(Box<Ty<'a>>),
-    Ref(Box<Ty<'a>>),
-    MutRef(Box<Ty<'a>>),
-    Mut(Box<Ty<'a>>),
+    Ptr(Box<'a, Ty<'a>>),
+    Ref(Box<'a, Ty<'a>>),
+    MutRef(Box<'a, Ty<'a>>),
+    Mut(Box<'a, Ty<'a>>),
     Isz,
     I8,
     I16,

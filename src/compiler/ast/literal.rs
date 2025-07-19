@@ -1,16 +1,18 @@
 use crate::{choice, node};
 
+use bumpalo::boxed::Box;
+
 choice!(Literal, {
-    Str(Box<StrLiteral<'a>>),
-    Char(Box<CharLiteral<'a>>),
-    Bool(Box<BoolLiteral<'a>>),
-    Float(Box<FloatLiteral<'a>>),
-    Int(Box<IntLiteral<'a>>),
+    Str(Box<'a, StrLiteral<'a>>),
+    Char(Box<'a, CharLiteral<'a>>),
+    Bool(Box<'a, BoolLiteral<'a>>),
+    Float(Box<'a, FloatLiteral<'a>>),
+    Int(Box<'a, IntLiteral<'a>>),
 });
 
 choice!(NegativeLiteral, {
-    Int(Box<IntLiteral<'a>>),
-    Float(Box<FloatLiteral<'a>>),
+    Int(Box<'a, IntLiteral<'a>>),
+    Float(Box<'a, FloatLiteral<'a>>),
 });
 
 node!(StrLiteral, {

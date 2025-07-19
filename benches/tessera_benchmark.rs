@@ -1,3 +1,4 @@
+use bumpalo::Bump;
 use codespan_reporting::files::SimpleFiles;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
@@ -45,8 +46,9 @@ fn compile(source: &str) {
     let mut files = SimpleFiles::new();
 
     let file_id = files.add("example.tes", source);
+    let arena = Bump::new();
 
-    let mut parser = parser::Parser::new(source, lexer, files, file_id);
+    let mut parser = parser::Parser::new(&arena, source, lexer, files, file_id);
 
     let _ = parser.parse().unwrap();
 }
