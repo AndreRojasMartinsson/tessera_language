@@ -41,9 +41,30 @@ choice!(Stmt, {
 choice!(DeclStmt, {
     Const(Box<'a, ConstItem<'a>>),
     Empty(Box<'a, EmptyStmt<'a>>),
+    Import(Box<'a, ImportItem<'a>>),
     Func(Box<'a, FuncItem<'a>>),
     Extern(Box<'a, ExternFunc<'a>>),
     Var(Box<'a, VarItem<'a>>),
+});
+
+node!(ImportItem, {
+    tree: ImportTree<'a>,
+});
+
+choice!(ImportTree, {
+    Path(Box<'a, ImportPath<'a>>),
+    Group(Box<'a, ImportGroup<'a>>),
+    Name(Box<'a, Identifier<'a>>),
+    Glob
+});
+
+node!(ImportGroup, {
+    items: Punctuated<'a, ImportTree<'a>>
+});
+
+node!(ImportPath, {
+    ident: Identifier<'a>,
+    tree: ImportTree<'a>,
 });
 
 node!(EmptyStmt, {});

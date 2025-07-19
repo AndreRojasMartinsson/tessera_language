@@ -1,4 +1,7 @@
-use std::{cell::Ref, hint::cold_path, marker::PhantomData, path};
+use std::{
+    cell::Ref, hint::cold_path, marker::PhantomData, os::unix::process::parent_id, path,
+    process::id,
+};
 
 use bumpalo::{Bump, boxed::Box, collections::Vec};
 
@@ -117,6 +120,7 @@ where
             | Kind::KwConst
             | Kind::KwExtern
             | Kind::Identifier
+            | Kind::KwUsing
             | Kind::PrimitiveType
             | Kind::KwMut => {
                 let decl = self.parse_decl_stmt()?;
@@ -601,6 +605,13 @@ where
             Kind::PrimitiveType | Kind::Identifier | Kind::KwMut => {
                 return Ok(DeclStmt::Var(Box::new_in(self.parse_var_item()?, arena)));
             }
+
+            Kind::KwUsing => {
+                return Ok(DeclStmt::Import(Box::new_in(
+                    self.parse_import_item()?,
+                    arena,
+                )));
+            }
             _ => {
                 cold_path();
             }
@@ -641,6 +652,58 @@ where
                 })
             }
         }
+    }
+
+    fn parse_import_item(&mut self) -> Result<ImportItem<'a>> {
+        let span = self.start_span();
+
+        self.expect(Kind::KwUsing)?;
+
+        let tree = self.parse_import_tree()?;
+
+        Ok(ImportItem::new(self.finish_span(span), tree))
+    }
+
+    fn parse_import_tree(&mut self) -> Result<ImportTree<'a>> {
+        let span = self.start_span();
+        if let Some(group) = self.parse_node_if(Kind::LBrace, Self::parse_import_group)? {
+            return Ok(ImportTree::Group(Box::new_in(group, self.arena)));
+        }
+
+        if self.eat(Kind::Asterisk) {
+            return Ok(ImportTree::Glob);
+        }
+
+        if self.at(Kind::Identifier) {
+            let ident = self.parse_identifier()?;
+
+            if self.eat(Kind::PathSep) {
+                let subtree = self.parse_import_tree()?;
+                let path = ImportPath::new(self.finish_span(span), ident, subtree);
+                return Ok(ImportTree::Path(Box::new_in(path, self.arena)));
+            }
+
+            return Ok(ImportTree::Name(Box::new_in(ident, self.arena)));
+        }
+
+        let found = self.cur_kind();
+        shortcircuit!(ParseError::UnexpectedToken {
+            found,
+            expected: vec![Kind::Identifier, Kind::LBrace, Kind::Asterisk],
+            span: self.finish_span(self.start_span()),
+        })
+    }
+
+    fn parse_import_group(&mut self) -> Result<ImportGroup<'a>> {
+        let span = self.start_span();
+
+        self.expect(Kind::LBrace)?;
+
+        let items = self.parse_punctuated(Self::parse_import_tree, Kind::Comma, Kind::RBrace)?;
+
+        self.expect(Kind::RBrace)?;
+
+        Ok(ImportGroup::new(self.finish_span(span), items))
     }
 
     fn parse_extern_func(&mut self) -> Result<ExternFunc<'a>> {

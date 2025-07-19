@@ -1,5 +1,4 @@
-extern fn void exit(i32 code);
-extern const fn void exit_const(i32 code);
+using std:io;
 
 fn i32 main(&self, i32 anyways) {
   //infer a := 3;

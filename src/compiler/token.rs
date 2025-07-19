@@ -24,6 +24,7 @@ pub enum Kind {
     KwIn,
     KwMatch,
     KwPub,
+    KwUsing,
     KwRef,
     KwReturn,
     KwWhile,
