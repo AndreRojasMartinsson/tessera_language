@@ -654,25 +654,6 @@ where
         }
     }
 
-    // fn parse_field(&mut self, base_identifier: Identifier<'a>) -> Result<Box<'a, Field<'a>>> {
-    //     let span = self.start_span();
-    //
-    //     let mut base = FieldBase::Ident(self.heap_alloc(base_identifier));
-    //
-    //     while self.eat(Kind::Dot) {
-    //         let ident = self.parse_identifier()?;
-    //
-    //         let field = Field::new(self.finish_span(span), base, ident);
-    //         base = FieldBase::Field(self.heap_alloc(field));
-    //     }
-    //
-    //     match base {
-    //         FieldBase::Field(field) => Ok(field),
-    //
-    //         _ => unreachable!(),
-    //     }
-    // }
-
     fn parse_import_item(&mut self) -> Result<ImportItem<'a>> {
         let span = self.start_span();
 
