@@ -340,11 +340,11 @@ node!(Identifier, {
 
 choice!(NameExpr, {
     /// e.g. `std:io`
-    Path(Path<'a>),
+    Path(Box<Path<'a>>),
     /// e.g. `<base>.member` - where `base` is *itself* another NameExpr
-    Field(Field<'a>),
+    Field(Box<Field<'a>>),
     /// e.g. `base`
-    Ident(Identifier<'a>),
+    Ident(Box<Identifier<'a>>),
 });
 
 node!(Field, {
@@ -368,7 +368,7 @@ node!(PathSegment, {
 
 choice!(PathArguments, {
     None,
-    Generic(GenericArgs<'a>)
+    Generic(Box<GenericArgs<'a>>)
 });
 
 node!(GenericArgs, {
@@ -376,7 +376,7 @@ node!(GenericArgs, {
 });
 
 choice!(GenericArg, {
-    Ty(Type<'a>),
+    Ty(Box<Type<'a>>),
 });
 
 node!(Type, {

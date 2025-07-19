@@ -984,9 +984,9 @@ where
         let root_identifier = self.parse_identifier()?;
 
         let value = match self.cur_kind() {
-            Kind::PathSep => NameExpr::Path(self.parse_path(Some(root_identifier))?),
-            Kind::Dot => NameExpr::Field(self.parse_field(root_identifier)?),
-            _ => NameExpr::Ident(root_identifier),
+            Kind::PathSep => NameExpr::Path(Box::new(self.parse_path(Some(root_identifier))?)),
+            Kind::Dot => NameExpr::Field(Box::new(self.parse_field(root_identifier)?)),
+            _ => NameExpr::Ident(Box::new(root_identifier)),
         };
 
         Ok(value)
@@ -1276,7 +1276,7 @@ where
     fn parse_generic_arg(&mut self) -> Result<GenericArg<'a>> {
         let ty = self.parse_type()?;
 
-        Ok(GenericArg::Ty(ty))
+        Ok(GenericArg::Ty(Box::new(ty)))
     }
 
     fn parse_type(&mut self) -> Result<Type<'a>> {
@@ -1433,7 +1433,7 @@ where
 
         self.eat(Kind::PathSep);
 
-        Ok(PathArguments::Generic(args))
+        Ok(PathArguments::Generic(Box::new(args)))
     }
 
     fn parse_identifier(&mut self) -> Result<Identifier<'a>> {

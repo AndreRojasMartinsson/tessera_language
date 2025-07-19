@@ -37,5 +37,6 @@ macro_rules! choice {
             $( $(#[$doc])* $member $( ( $ty ) )?, )*
             Marker(std::marker::PhantomData::<&'a str>)
         }
+
     };
 }
