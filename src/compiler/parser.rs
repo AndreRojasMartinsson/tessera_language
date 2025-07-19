@@ -3,13 +3,18 @@ use std::{
     cell::Ref, hint::unreachable_unchecked, marker::PhantomData, ops::Neg, path, process::id, vec,
 };
 
+use bumpalo::{Bump, boxed::Box};
+
 use clap::Id;
 use codespan_reporting::{
     diagnostic::{self, Diagnostic},
     files::Files,
     term::{self, termcolor},
 };
-use color_eyre::eyre::{self, Context, Report, Result as EyreResult, bail, eyre};
+use color_eyre::{
+    eyre::{self, Context, Report, Result as EyreResult, bail, eyre},
+    owo_colors::OwoColorize,
+};
 use log::{debug, warn};
 
 type Result<T, E = ParseError> = EyreResult<T, E>;
@@ -29,18 +34,12 @@ pub struct Parser<'a, T: Lex<'a>, F: Files<'a>> {
     lexer: T,
     cur_token: Token<'a>,
     prev_token_end: usize,
+    arena: &'a Bump,
 
     // error handling
     diagnostics: Vec<Diagnostic<F::FileId>>,
     files: F,
     file_id: F::FileId,
-}
-
-// Helper macro to box AST nodes uniformly
-macro_rules! boxed {
-    ($variant:path, $value:expr) => {
-        Ok($variant(Box::new($value)))
-    };
 }
 
 macro_rules! shortcircuit {
@@ -54,7 +53,7 @@ where
     T: Lex<'a>,
     F: Files<'a>,
 {
-    pub fn new(source: &'a str, lexer: T, files: F, file_id: F::FileId) -> Self {
+    pub fn new(arena: &'a Bump, source: &'a str, lexer: T, files: F, file_id: F::FileId) -> Self {
         Self {
             source,
             lexer,
@@ -62,6 +61,7 @@ where
             prev_token_end: 0,
             files,
             file_id,
+            arena,
             diagnostics: Vec::new(),
         }
     }
@@ -95,6 +95,10 @@ where
         Ok(SourceFile::new(Span::new(0, self.source.len()), items))
     }
 
+    fn heap_alloc<V>(&self, value: V) -> Box<'a, V> {
+        Box::new_in(value, &self.arena)
+    }
+
     fn parse_statement_inner(&mut self) -> Result<Stmt<'a>> {
         let span = self.start_span();
 
@@ -104,9 +108,9 @@ where
                 let span = self.start_span();
                 self.advance();
 
-                Stmt::Decl(DeclStmt::Empty(Box::new(EmptyStmt::new(
-                    self.finish_span(span),
-                ))))
+                Stmt::Decl(DeclStmt::Empty(
+                    self.heap_alloc(EmptyStmt::new(self.finish_span(span))),
+                ))
             }
 
             // Declaration starts: functions, constants, externs, identifiers start variable decls
@@ -125,7 +129,7 @@ where
             kind if Self::is_block_start(kind) => {
                 let blk = self.parse_expr_ending_with_block()?;
 
-                Stmt::Expr(ExprStmt::ExprEndingWithBlock(Box::new(blk)))
+                Stmt::Expr(ExprStmt::ExprEndingWithBlock(self.heap_alloc(blk)))
             }
 
             // Fallback to generic expression statements
@@ -143,44 +147,49 @@ where
         let start = self.start_span();
         const SYNC: &[Kind] = &[Kind::Semicolon, Kind::RBrace, Kind::Eof];
 
+        let arena = self.arena;
+
         self.recoverable(
             start,
             SYNC,
             |p| p.parse_statement_inner(),
-            |span| Stmt::Decl(DeclStmt::Empty(Box::new(EmptyStmt::new(span)))),
+            |span| Stmt::Decl(DeclStmt::Empty(Box::new_in(EmptyStmt::new(span), &arena))),
         )
     }
 
     /// Parse a standalone expression statement; blocks are special-cased to preserve trailing block semantics.
     fn parse_expr_statement(&mut self) -> Result<ExprStmt<'a>> {
+        let arena = self.arena;
+
         if Self::is_block_start(self.cur_kind()) {
             // Preserve block structure when used as statement
-            return Ok(ExprStmt::ExprEndingWithBlock(Box::new(
+            return Ok(ExprStmt::ExprEndingWithBlock(Box::new_in(
                 self.parse_expr_ending_with_block()?,
+                arena,
             )));
         }
 
         // For plain expressions, we delegate to the precedence-driven expr parser
-        Ok(ExprStmt::Expr(Box::new(self.parse_expr(0)?)))
+        Ok(ExprStmt::Expr(Box::new_in(self.parse_expr(0)?, arena)))
     }
 
     fn parse_expr_ending_with_block(&mut self) -> Result<ExprEndingWithBlock<'a>> {
         let expr = match self.cur_kind() {
             Kind::LBrace => {
                 let blk = self.parse_block()?;
-                ExprEndingWithBlock::Block(Box::new(blk))
+                ExprEndingWithBlock::Block(self.heap_alloc(blk))
             }
             Kind::KwIf => {
                 let expr = self.parse_if_expr()?;
-                ExprEndingWithBlock::If(Box::new(expr))
+                ExprEndingWithBlock::If(self.heap_alloc(expr))
             }
             Kind::KwMatch => {
                 let expr = self.parse_match_expr()?;
-                ExprEndingWithBlock::Match(Box::new(expr))
+                ExprEndingWithBlock::Match(self.heap_alloc(expr))
             }
             Kind::KwWhile => {
                 let expr = self.parse_while_expr()?;
-                ExprEndingWithBlock::While(Box::new(expr))
+                ExprEndingWithBlock::While(self.heap_alloc(expr))
             }
             Kind::KwFor => return self.parse_for_expr_with_lookahead(),
             // SAFETY: We checked via is_block_start that only these kinds can occur
@@ -198,11 +207,13 @@ where
         let condition = self.parse_expr(0)?;
         let body = self.parse_block()?;
 
+        let arena = self.arena;
+
         let alternative = if self.eat(Kind::KwElse) {
             if self.at(Kind::KwIf) {
-                Some(ElseClause::If(Box::new(self.parse_if_expr()?)))
+                Some(ElseClause::If(Box::new_in(self.parse_if_expr()?, arena)))
             } else {
-                Some(ElseClause::Block(Box::new(self.parse_block()?)))
+                Some(ElseClause::Block(Box::new_in(self.parse_block()?, arena)))
             }
         } else {
             None
@@ -282,6 +293,8 @@ where
 
     fn parse_pattern(&mut self) -> Result<Pattern<'a>> {
         let span = self.start_span();
+        let arena = self.arena;
+
         let mut lhs = match self.cur_kind() {
             Kind::Underscore => {
                 self.advance();
@@ -292,12 +305,14 @@ where
             | Kind::IntLiteral
             | Kind::CharLiteral
             | Kind::FloatLiteral
-            | Kind::StringLiteral => Pattern::Lit(Box::new(self.parse_lit_pattern()?)),
+            | Kind::StringLiteral => Pattern::Lit(Box::new_in(self.parse_lit_pattern()?, arena)),
 
-            Kind::Identifier => Pattern::Ident(Box::new(self.parse_identifier()?)),
-            Kind::KwRef => Pattern::Ref(Box::new(self.parse_ref_pattern()?)),
-            Kind::Ampersand => Pattern::Reference(Box::new(self.parse_reference_pattern()?)),
-            Kind::KwMut => Pattern::Mut(Box::new(self.parse_mut_pattern()?)),
+            Kind::Identifier => Pattern::Ident(Box::new_in(self.parse_identifier()?, arena)),
+            Kind::KwRef => Pattern::Ref(Box::new_in(self.parse_ref_pattern()?, arena)),
+            Kind::Ampersand => {
+                Pattern::Reference(Box::new_in(self.parse_reference_pattern()?, arena))
+            }
+            Kind::KwMut => Pattern::Mut(Box::new_in(self.parse_mut_pattern()?, arena)),
 
             _ => todo!(),
         };
@@ -308,7 +323,7 @@ where
 
             let rhs = self.parse_pattern()?;
 
-            lhs = Pattern::Or(Box::new(OrPattern::new(self.finish_span(span), lhs, rhs)));
+            lhs = Pattern::Or(self.heap_alloc(OrPattern::new(self.finish_span(span), lhs, rhs)));
         }
 
         Ok(lhs)
@@ -352,16 +367,17 @@ where
 
     fn parse_lit_pattern(&mut self) -> Result<LitPat<'a>> {
         let start = self.start_span();
+        let arena = self.arena;
 
         let lit = match self.cur_value() {
-            &Value::Int(value) => LitPat::Int(Box::new(self.parse_int_literal()?)),
-            &Value::Float(value) => LitPat::Float(Box::new(self.parse_float_literal()?)),
-            &Value::Bool(value) => LitPat::Bool(Box::new(self.parse_bool_literal()?)),
-            &Value::String(value) => LitPat::Str(Box::new(self.parse_string_literal()?)),
-            &Value::Char(value) => LitPat::Char(Box::new(self.parse_char_literal()?)),
+            &Value::Int(value) => LitPat::Int(Box::new_in(self.parse_int_literal()?, arena)),
+            &Value::Float(value) => LitPat::Float(Box::new_in(self.parse_float_literal()?, arena)),
+            &Value::Bool(value) => LitPat::Bool(Box::new_in(self.parse_bool_literal()?, arena)),
+            &Value::String(value) => LitPat::Str(Box::new_in(self.parse_string_literal()?, arena)),
+            &Value::Char(value) => LitPat::Char(Box::new_in(self.parse_char_literal()?, arena)),
 
             _ if self.cur_kind() == Kind::Minus => {
-                LitPat::Neg(Box::new(self.parse_negative_literal()?))
+                LitPat::Neg(Box::new_in(self.parse_negative_literal()?, arena))
             }
 
             other => {
@@ -387,9 +403,15 @@ where
         let start = self.start_span();
         self.expect(Kind::Minus)?;
 
+        let arena = self.arena;
+
         let lit = match self.cur_value() {
-            &Value::Int(value) => NegativeLiteral::Int(Box::new(self.parse_int_literal()?)),
-            &Value::Float(value) => NegativeLiteral::Float(Box::new(self.parse_float_literal()?)),
+            &Value::Int(value) => {
+                NegativeLiteral::Int(Box::new_in(self.parse_int_literal()?, arena))
+            }
+            &Value::Float(value) => {
+                NegativeLiteral::Float(Box::new_in(self.parse_float_literal()?, arena))
+            }
 
             other => {
                 return Err(ParseError::UnexpectedToken {
@@ -501,7 +523,7 @@ where
         if self.eat(Kind::Assign) {
             let for_expr = self._parse_for_expr(span, ty, name)?;
 
-            return Ok(ExprEndingWithBlock::For(Box::new(for_expr)));
+            return Ok(ExprEndingWithBlock::For(self.heap_alloc(for_expr)));
         }
 
         self.expect(Kind::KwIn)?;
@@ -520,7 +542,7 @@ where
             body,
         };
 
-        Ok(ExprEndingWithBlock::ForIn(Box::new(for_in)))
+        Ok(ExprEndingWithBlock::ForIn(self.heap_alloc(for_in)))
     }
 
     fn _parse_for_expr(
@@ -571,17 +593,22 @@ where
     fn parse_decl_stmt(&mut self) -> Result<DeclStmt<'a>> {
         let start = self.start_span();
         let mut modifiers = Modifiers::empty();
+        let arena = self.arena;
+
         // If starting with type or mut, parse var decl directly since variable declarations are the only
         // node to start with mut.
         match self.cur_kind() {
             Kind::PrimitiveType | Kind::Identifier | Kind::KwMut => {
-                return boxed!(DeclStmt::Var, self.parse_var_item()?);
+                return Ok(DeclStmt::Var(Box::new_in(self.parse_var_item()?, arena)));
             }
             _ => {}
         };
 
         if self.eat(Kind::KwExtern) {
-            return Ok(DeclStmt::Extern(Box::new(self.parse_extern_func()?)));
+            return Ok(DeclStmt::Extern(Box::new_in(
+                self.parse_extern_func()?,
+                arena,
+            )));
         }
 
         // Public, extern, const modifiers adjust subsequent function or const decl
@@ -594,8 +621,14 @@ where
         }
 
         match self.cur_kind() {
-            Kind::PrimitiveType => boxed!(DeclStmt::Const, self.parse_const_item(modifiers)?),
-            Kind::KwFn => boxed!(DeclStmt::Func, self.parse_function_item(modifiers)?),
+            Kind::PrimitiveType => Ok(DeclStmt::Const(Box::new_in(
+                self.parse_const_item(modifiers)?,
+                arena,
+            ))),
+            Kind::KwFn => Ok(DeclStmt::Func(Box::new_in(
+                self.parse_function_item(modifiers)?,
+                arena,
+            ))),
 
             other => shortcircuit!(ParseError::UnexpectedToken {
                 found: other,
@@ -702,14 +735,16 @@ where
         match self.cur_kind() {
             Kind::Assign => {
                 let assign = self.parse_assignment_expr(lhs)?;
-                lhs = Expr::ExceptRange(Box::new(ExprWithoutRange::Assignment(Box::new(assign))))
+                lhs = Expr::ExceptRange(
+                    self.heap_alloc(ExprWithoutRange::Assignment(self.heap_alloc(assign))),
+                )
             }
 
             kind if CompoundOperator::try_from(kind).is_ok() => {
                 let assign = self.parse_compound_assignment_expr(lhs)?;
-                lhs = Expr::ExceptRange(Box::new(ExprWithoutRange::CompoundAssignment(Box::new(
-                    assign,
-                ))))
+                lhs = Expr::ExceptRange(self.heap_alloc(ExprWithoutRange::CompoundAssignment(
+                    self.heap_alloc(assign),
+                )))
             }
 
             _ => {}
@@ -745,7 +780,7 @@ where
                 let span = self.finish_span(start);
                 let full = RangeFullExpr::new(span, op, lhs, rhs);
 
-                lhs = Expr::Range(Box::new(RangeExpr::Full(Box::new(full))));
+                lhs = Expr::Range(self.heap_alloc(RangeExpr::Full(self.heap_alloc(full))));
                 continue;
             }
 
@@ -776,21 +811,26 @@ where
             let rhs = self.parse_expr(r_bp)?;
 
             let binary = BinaryExpr::new(self.finish_span(span), op, lhs, rhs);
-            lhs = Expr::ExceptRange(Box::new(ExprWithoutRange::Binary(Box::new(binary))));
+            lhs = Expr::ExceptRange(
+                self.heap_alloc(ExprWithoutRange::Binary(self.heap_alloc(binary))),
+            );
         }
 
         Ok(lhs)
     }
 
     fn parse_postfix(&mut self, mut lhs: Expr<'a>) -> Result<Expr<'a>> {
+        let arena = self.arena;
         loop {
             lhs = match self.cur_kind() {
-                Kind::KwAs => Expr::ExceptRange(Box::new(ExprWithoutRange::TypeCast(Box::new(
-                    self.parse_type_cast_expr(lhs)?,
-                )))),
+                Kind::KwAs => Expr::ExceptRange(Box::new_in(
+                    ExprWithoutRange::TypeCast(Box::new_in(self.parse_type_cast_expr(lhs)?, arena)),
+                    arena,
+                )),
 
-                Kind::LParen | Kind::LessThan => Expr::ExceptRange(Box::new(
-                    ExprWithoutRange::Call(Box::new(self.parse_call_expr(lhs)?)),
+                Kind::LParen | Kind::LessThan => Expr::ExceptRange(Box::new_in(
+                    ExprWithoutRange::Call(Box::new_in(self.parse_call_expr(lhs)?, arena)),
+                    arena,
                 )),
 
                 _ => break Ok(lhs),
@@ -875,44 +915,48 @@ where
             | Kind::FloatLiteral
             | Kind::StringLiteral => {
                 let lit = self.parse_literal()?;
-                Expr::ExceptRange(Box::new(ExprWithoutRange::Literal(Box::new(lit))))
+                Expr::ExceptRange(self.heap_alloc(ExprWithoutRange::Literal(self.heap_alloc(lit))))
             }
 
             Kind::KwContinue => {
                 let expr = self.parse_continue_expr()?;
-                Expr::ExceptRange(Box::new(ExprWithoutRange::Continue(Box::new(expr))))
+                Expr::ExceptRange(
+                    self.heap_alloc(ExprWithoutRange::Continue(self.heap_alloc(expr))),
+                )
             }
 
             Kind::KwBreak => {
                 let expr = self.parse_break_expr()?;
-                Expr::ExceptRange(Box::new(ExprWithoutRange::Break(Box::new(expr))))
+                Expr::ExceptRange(self.heap_alloc(ExprWithoutRange::Break(self.heap_alloc(expr))))
             }
 
             Kind::KwReturn => {
                 let expr = self.parse_return_expr()?;
-                Expr::ExceptRange(Box::new(ExprWithoutRange::Return(Box::new(expr))))
+                Expr::ExceptRange(self.heap_alloc(ExprWithoutRange::Return(self.heap_alloc(expr))))
             }
 
             Kind::Identifier => {
                 let expr = self.parse_name_expr()?;
-                Expr::ExceptRange(Box::new(ExprWithoutRange::Name(Box::new(expr))))
+                Expr::ExceptRange(self.heap_alloc(ExprWithoutRange::Name(self.heap_alloc(expr))))
             }
 
             Kind::LParen => {
                 let expr = self.parse_paren_expr()?;
-                Expr::ExceptRange(Box::new(ExprWithoutRange::Paren(Box::new(expr))))
+                Expr::ExceptRange(self.heap_alloc(ExprWithoutRange::Paren(self.heap_alloc(expr))))
             }
 
             Kind::Ampersand | Kind::LogAnd => {
                 let expr = self.parse_ref_expr()?;
-                Expr::ExceptRange(Box::new(ExprWithoutRange::Reference(Box::new(expr))))
+                Expr::ExceptRange(
+                    self.heap_alloc(ExprWithoutRange::Reference(self.heap_alloc(expr))),
+                )
             }
 
             // Unary Expressions
             Kind::Minus | Kind::Bang | Kind::BitNot | Kind::Asterisk => {
                 let expr = self.parse_unary_expr()?;
 
-                Expr::ExceptRange(Box::new(ExprWithoutRange::Unary(Box::new(expr))))
+                Expr::ExceptRange(self.heap_alloc(ExprWithoutRange::Unary(self.heap_alloc(expr))))
             }
 
             other => {
@@ -966,7 +1010,9 @@ where
         for _ in 0..amp_count {
             let loc = self.finish_span(span);
             let node = RefExpr::new(loc, mutable, expr);
-            expr = Expr::ExceptRange(Box::new(ExprWithoutRange::Reference(Box::new(node))));
+            expr = Expr::ExceptRange(
+                self.heap_alloc(ExprWithoutRange::Reference(self.heap_alloc(node))),
+            );
         }
 
         let value = match_deref::match_deref! {
@@ -976,36 +1022,44 @@ where
             }
         }?;
 
-        Ok(value.clone())
+        Ok(RefExpr {
+            _marker: PhantomData,
+            loc: self.finish_span(span),
+            mutable: value.mutable,
+            operand: expr,
+        })
     }
 
     fn parse_name_expr(&mut self) -> Result<NameExpr<'a>> {
         let span = self.start_span();
         let root_identifier = self.parse_identifier()?;
+        let arena = self.arena;
 
         let value = match self.cur_kind() {
-            Kind::PathSep => NameExpr::Path(Box::new(self.parse_path(Some(root_identifier))?)),
-            Kind::Dot => NameExpr::Field(Box::new(self.parse_field(root_identifier)?)),
-            _ => NameExpr::Ident(Box::new(root_identifier)),
+            Kind::PathSep => {
+                NameExpr::Path(Box::new_in(self.parse_path(Some(root_identifier))?, arena))
+            }
+            Kind::Dot => NameExpr::Field(self.parse_field(root_identifier)?),
+            _ => NameExpr::Ident(self.heap_alloc(root_identifier)),
         };
 
         Ok(value)
     }
 
-    fn parse_field(&mut self, base_identifier: Identifier<'a>) -> Result<Field<'a>> {
+    fn parse_field(&mut self, base_identifier: Identifier<'a>) -> Result<Box<'a, Field<'a>>> {
         let span = self.start_span();
 
-        let mut base = FieldBase::Ident(Box::new(base_identifier));
+        let mut base = FieldBase::Ident(self.heap_alloc(base_identifier));
 
         while self.eat(Kind::Dot) {
             let ident = self.parse_identifier()?;
 
             let field = Field::new(self.finish_span(span), base, ident);
-            base = FieldBase::Field(Box::new(field));
+            base = FieldBase::Field(self.heap_alloc(field));
         }
 
         match base {
-            FieldBase::Field(field) => Ok(*field),
+            FieldBase::Field(field) => Ok(field),
 
             _ => unreachable!(),
         }
@@ -1102,7 +1156,7 @@ where
         let span = self.finish_span(span);
 
         let lit = match token.kind {
-            Kind::BoolLiteral => Literal::Bool(Box::new(BoolLiteral::new(
+            Kind::BoolLiteral => Literal::Bool(self.heap_alloc(BoolLiteral::new(
                 span,
                 match token.value {
                     Value::Bool(value) => value,
@@ -1110,7 +1164,7 @@ where
                     _ => unsafe { unreachable_unchecked() },
                 },
             ))),
-            Kind::IntLiteral => Literal::Int(Box::new(IntLiteral::new(
+            Kind::IntLiteral => Literal::Int(self.heap_alloc(IntLiteral::new(
                 span,
                 match token.value {
                     Value::Int(value) => value,
@@ -1118,7 +1172,7 @@ where
                     _ => unsafe { unreachable_unchecked() },
                 },
             ))),
-            Kind::CharLiteral => Literal::Char(Box::new(CharLiteral::new(
+            Kind::CharLiteral => Literal::Char(self.heap_alloc(CharLiteral::new(
                 span,
                 match token.value {
                     Value::Char(value) => value,
@@ -1126,7 +1180,7 @@ where
                     _ => unsafe { unreachable_unchecked() },
                 },
             ))),
-            Kind::FloatLiteral => Literal::Float(Box::new(FloatLiteral::new(
+            Kind::FloatLiteral => Literal::Float(self.heap_alloc(FloatLiteral::new(
                 span,
                 match token.value {
                     Value::Float(value) => value,
@@ -1134,7 +1188,7 @@ where
                     _ => unsafe { unreachable_unchecked() },
                 },
             ))),
-            Kind::StringLiteral => Literal::Str(Box::new(StrLiteral::new(
+            Kind::StringLiteral => Literal::Str(self.heap_alloc(StrLiteral::new(
                 span,
                 match token.value {
                     Value::String(value) => value,
@@ -1188,7 +1242,7 @@ where
                 let expr = self.parse_expr(0)?;
 
                 if self.eat(Kind::Semicolon) {
-                    items.push(Stmt::Expr(ExprStmt::Expr(Box::new(expr))));
+                    items.push(Stmt::Expr(ExprStmt::Expr(self.heap_alloc(expr))));
                     continue;
                 } else {
                     final_expr = Some(expr);
@@ -1245,7 +1299,7 @@ where
         let ty = self.parse_type()?;
 
         if self.eat(Kind::Kwself) {
-            return Ok(Parameter::SelfParam(Box::new(SelfParameter::new(
+            return Ok(Parameter::SelfParam(self.heap_alloc(SelfParameter::new(
                 self.finish_span(span),
                 Modifiers::empty(),
             ))));
@@ -1253,7 +1307,7 @@ where
 
         let name = self.parse_identifier()?;
 
-        Ok(Parameter::Ident(Box::new(IdentParameter::new(
+        Ok(Parameter::Ident(self.heap_alloc(IdentParameter::new(
             self.finish_span(span),
             ty,
             name,
@@ -1276,7 +1330,7 @@ where
     fn parse_generic_arg(&mut self) -> Result<GenericArg<'a>> {
         let ty = self.parse_type()?;
 
-        Ok(GenericArg::Ty(Box::new(ty)))
+        Ok(GenericArg::Ty(self.heap_alloc(ty)))
     }
 
     fn parse_type(&mut self) -> Result<Type<'a>> {
@@ -1304,13 +1358,13 @@ where
 
             let ty = self.parse_ty()?;
 
-            let inner = Box::new(ty);
+            let inner = self.heap_alloc(ty);
 
-            let ty = match (reference, mutable_specifier) {
-                (true, true) => Ty::MutRef(inner),
-                (true, false) => Ty::Ref(inner),
-                (false, true) => Ty::Mut(inner),
-                (false, false) => *inner,
+            let ty: Box<'a, Ty<'a>> = match (reference, mutable_specifier) {
+                (true, true) => self.heap_alloc(Ty::MutRef(inner)),
+                (true, false) => self.heap_alloc(Ty::Ref(inner)),
+                (false, true) => self.heap_alloc(Ty::Mut(inner)),
+                (false, false) => inner,
             };
 
             if !self.eat(Kind::PathSep) {
@@ -1378,17 +1432,16 @@ where
     }
 
     fn parse_path(&mut self, root_identifier: Option<Identifier<'a>>) -> Result<Path<'a>> {
-        let span = root_identifier
-            .clone()
-            .map(|ident| ident.loc)
-            .unwrap_or_else(|| self.start_span());
-
+        let mut span: Span;
         let mut path_segments = vec![];
 
         if let Some(ident) = root_identifier {
+            span = ident.loc;
             path_segments.push(self.parse_path_segment(Some(ident))?);
         } else {
-            path_segments.push(self.parse_path_segment(None)?)
+            let seg = self.parse_path_segment(None)?;
+            span = seg.loc;
+            path_segments.push(seg)
         }
 
         while self.at(Kind::Identifier) {
@@ -1407,7 +1460,7 @@ where
         let span = self.start_span();
 
         let ident = if let Some(ident) = ident {
-            ident
+            Identifier::new(ident.loc, ident.name)
         } else {
             self.parse_identifier()?
         };
@@ -1433,7 +1486,7 @@ where
 
         self.eat(Kind::PathSep);
 
-        Ok(PathArguments::Generic(Box::new(args)))
+        Ok(PathArguments::Generic(self.heap_alloc(args)))
     }
 
     fn parse_identifier(&mut self) -> Result<Identifier<'a>> {
