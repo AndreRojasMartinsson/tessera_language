@@ -1,0 +1,55 @@
+[package]
+name = "tessera_language"
+version = "0.1.0"
+edition = "2024"
+autobins = false
+default-run = "tessera"
+
+[[bin]]
+name = "tessera"
+path = "src/main.rs"
+
+[dependencies]
+bitflags = "2.9.1"
+bumpalo = { version = "3.19.0", features = ["std", "collections", "boxed"] }
+clap = { version = "4.5.41", features = [
+  "derive",
+  "wrap_help",
+  "string",
+  "unicode",
+] }
+codespan-reporting = "0.12.0"
+color-eyre = "0.6.5"
+env_logger = "0.11.8"
+log = "0.4.27"
+match_deref = "0.1.2"
+memmap2 = "0.9.7"
+pretty_assertions = "1.4.1"
+string_cache = "0.8.9"
+
+[dev-dependencies]
+criterion = { version = "0.6.0", features = ["html_reports"] }
+
+[[bench]]
+name = "tessera_benchmark"
+harness = false
+
+[build-dependencies]
+string_cache_codegen = "0.5.4"
+
+[profile.dev]
+opt-level = 0
+codegen-units = 1024
+
+[profile.dev.package."*"]
+opt-level = 0
+
+[profile.release]
+strip = "debuginfo"
+opt-level = 3
+codegen-units = 1
+lto = true
+
+[profile.release.package."*"]
+strip = "debuginfo"
+opt-level = 3

@@ -1,0 +1,31 @@
+extern fn void exit(i32 code);
+extern const fn void exit_const(i32 code);
+
+fn i32 main(&self, i32 anyways) {
+  //infer a := 3;
+
+  //infer result := a:b:c;
+
+
+
+  io:println("Hello, world!");
+
+
+  //std:<T, U>:io:<P>:println;
+  //
+  //a.ohno.parse.bludclut;
+  //
+  //ok;
+
+
+  //while bludclut >= 10 {
+  //  infer b := 7.;
+  //};
+
+  //match a {
+  //  'a' | 'b' | 3 if a = 3 -> {},
+  //  _ -> {}
+  //}
+
+  |> 4;
+}

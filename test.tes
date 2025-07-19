@@ -1,0 +1,58 @@
+fn infer fibonacci(i32 n) {
+  i32 a := 0;
+  i32 b := 1;
+
+  if n = 0 {
+    |> a;
+  }
+
+  for infer i := 2 ..= n {
+    i32 c := a + b;
+    a := b;
+    b := c;
+  }; 
+
+  |> b;
+}
+
+fn infer fibonacci_2(i32 n) {
+  infer a := 0;
+  infer b := 1;
+
+  |> match n {
+    0 -> a,
+    _ -> {
+      for infer i := 2, i <= n, i += 1 {
+        infer c := a + b;
+        a := b;
+        b := c;
+      }
+
+      |> b;
+    }
+  };
+}
+
+fn i32 main(i32 argc, &str argv) {
+  i32 a := 5;
+  i32 b := 2;
+
+  fn infer fadd := fn (float a, float b) -> {
+    |> a + b;
+  }
+
+  fn infer fsub := fn (float a, float b) -> {
+    |> a - b;
+  }
+
+  fn i32 fmul := fn (float a, float b) -> {
+    |> a * b;
+  }
+
+  io:println("5.0 + 5.5 = " <> fadd(5., 5.5));
+
+  infer result := a + b;
+
+  io:println("Hello, world!");
+  io:println("Result = " <> result);
+}

@@ -1,0 +1,40 @@
+{
+  "_type": "ExprField",
+  "base": {
+    "_type": "ExprField",
+    "base": {
+      "_type": "ExprField",
+      "base": {
+        "_type": "ExprPath",
+        "path": {
+          "_type": "Path",
+          "segments": {
+            "0": {
+              "_type": "PathSegment",
+              "ident": {
+                "_type": "Ident",
+                "to_string": "std"
+              },
+              "arguments": {
+                "_type": "PathArguments::None"
+              }
+            },
+            "_type": "Punctuated"
+          }
+        }
+      },
+      "member": {
+        "_type": "Ident",
+        "to_string": "io"
+      }
+    },
+    "member": {
+      "_type": "Ident",
+      "to_string": "eh"
+    }
+  },
+  "member": {
+    "_type": "Ident",
+    "to_string": "blud"
+  }
+}
