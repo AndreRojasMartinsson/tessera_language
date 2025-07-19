@@ -1257,6 +1257,7 @@ where
         Ok(Block::new(self.finish_span(span), None, items, final_expr))
     }
 
+    #[inline(always)]
     fn is_start_of_expr(&mut self) -> bool {
         let kind = self.cur_kind();
 
@@ -1273,10 +1274,6 @@ where
                 | Kind::Minus
                 | Kind::Bang
                 | Kind::Asterisk
-                // | Kind::KwIf
-                // | Kind::KwMatch
-                // | Kind::KwWhile
-                // | Kind::KwFor
                 | Kind::LBrace
         )
     }
@@ -1324,12 +1321,14 @@ where
         Ok(GenericArgs::new(self.finish_span(span), args))
     }
 
+    #[inline(always)]
     fn parse_generic_arg(&mut self) -> Result<GenericArg<'a>> {
         let ty = self.parse_type()?;
 
         Ok(GenericArg::Ty(self.heap_alloc(ty)))
     }
 
+    #[inline(always)]
     fn parse_type(&mut self) -> Result<Type<'a>> {
         let span = self.start_span();
 
@@ -1381,6 +1380,7 @@ where
         ))
     }
 
+    #[inline(always)]
     fn parse_ty(&mut self) -> Result<Ty<'a>> {
         let token = self.cur_token.clone();
 
@@ -1397,6 +1397,7 @@ where
         }
     }
 
+    #[inline(always)]
     fn parse_primitive_type_value(&mut self, value: Value) -> Ty<'a> {
         match value {
             Value::Ident(atom) => match atom {
@@ -1428,6 +1429,7 @@ where
         }
     }
 
+    #[inline(always)]
     fn parse_path(&mut self, root_identifier: Option<Identifier<'a>>) -> Result<Path<'a>> {
         let mut span: Span;
 
@@ -1454,6 +1456,7 @@ where
         ))
     }
 
+    #[inline(always)]
     fn parse_path_segment(&mut self, ident: Option<Identifier<'a>>) -> Result<PathSegment<'a>> {
         let span = self.start_span();
 
@@ -1478,6 +1481,7 @@ where
         Ok(PathSegment::new(self.finish_span(span), ident, arguments))
     }
 
+    #[inline(always)]
     fn parse_path_arguments(&mut self) -> Result<PathArguments<'a>> {
         let span = self.start_span();
         let args = self.parse_generic_args()?;
@@ -1487,6 +1491,7 @@ where
         Ok(PathArguments::Generic(self.heap_alloc(args)))
     }
 
+    #[inline(always)]
     fn parse_identifier(&mut self) -> Result<Identifier<'a>> {
         let token = self.expect(Kind::Identifier)?;
 
@@ -1499,6 +1504,7 @@ where
         }
     }
 
+    #[inline(always)]
     fn recoverable<U, ParseFn, Dummy>(
         &mut self,
         start_span: Span,
@@ -1525,6 +1531,7 @@ where
         }
     }
 
+    #[inline(always)]
     fn skip_to(&mut self, sync_set: &[Kind]) {
         while !sync_set.contains(&self.cur_kind()) && !self.at(Kind::Eof) {
             debug!("Skipping {:?}", self.cur_kind());
@@ -1537,6 +1544,7 @@ where
         }
     }
 
+    #[inline(always)]
     fn parse_punctuated<P, U>(
         &mut self,
         parse_fn: P,
@@ -1563,6 +1571,7 @@ where
         Ok(Punctuated::new(self.finish_span(span), nodes))
     }
 
+    #[inline(always)]
     fn parse_node_if<P, U>(&mut self, clause: Kind, parse_fn: P) -> Result<Option<U>>
     where
         P: FnOnce(&mut Self) -> Result<U>,
@@ -1575,31 +1584,38 @@ where
         }
     }
 
+    #[inline(always)]
     fn start_span(&self) -> Span {
         let token = self.cur_token();
         Span::new(token.span.start, 0)
     }
 
+    #[inline(always)]
     fn finish_span(&self, span: Span) -> Span {
         Span::new(span.start, self.prev_token_end)
     }
 
+    #[inline(always)]
     fn cur_token(&self) -> &Token<'a> {
         &self.cur_token
     }
 
+    #[inline(always)]
     fn cur_kind(&self) -> Kind {
         self.cur_token.kind
     }
 
+    #[inline(always)]
     fn cur_value(&self) -> &Value<'a> {
         &self.cur_token.value
     }
 
+    #[inline(always)]
     fn at(&self, kind: Kind) -> bool {
         self.cur_kind() == kind
     }
 
+    #[inline(always)]
     fn bump(&mut self, kind: Kind) -> Option<Token<'a>> {
         if self.at(kind) {
             return Some(self.advance());
@@ -1607,6 +1623,7 @@ where
         None
     }
 
+    #[inline(always)]
     fn eat(&mut self, kind: Kind) -> bool {
         if self.at(kind) {
             self.advance();
@@ -1615,6 +1632,7 @@ where
         false
     }
 
+    #[inline(always)]
     fn expect_any_of(&mut self, expected_kinds: &[Kind]) -> Result<Token<'a>> {
         let start = self.start_span();
         let cur_token = self.cur_token.clone();
@@ -1632,6 +1650,7 @@ where
         })
     }
 
+    #[inline(always)]
     fn expect(&mut self, expected_kind: Kind) -> Result<Token<'a>> {
         let start = self.start_span();
         let cur_token = self.cur_token.clone();
@@ -1650,6 +1669,7 @@ where
         })
     }
 
+    #[inline(always)]
     fn advance(&mut self) -> Token<'a> {
         let cur_token = self.cur_token.clone();
 

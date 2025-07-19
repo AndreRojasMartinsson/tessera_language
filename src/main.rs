@@ -3,7 +3,7 @@ use std::{fs::File, path::PathBuf};
 
 use bumpalo::Bump;
 use clap::Parser;
-use codespan_reporting::files::{Files, SimpleFiles};
+use codespan_reporting::files::SimpleFiles;
 use color_eyre::eyre::{Context, Result, ensure};
 use memmap2::Mmap;
 use tessera_language::{lexer::Lexer, parser};
