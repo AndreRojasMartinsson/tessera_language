@@ -1,4 +1,4 @@
-use std::{cell::Ref, marker::PhantomData, path};
+use std::{cell::Ref, hint::cold_path, marker::PhantomData, path};
 
 use bumpalo::{Bump, boxed::Box, collections::Vec};
 
@@ -74,6 +74,7 @@ where
 
         loop {
             if self.at(Kind::Eof) {
+                cold_path();
                 break;
             }
 
@@ -378,6 +379,7 @@ where
             }
 
             other => {
+                cold_path();
                 return Err(ParseError::UnexpectedToken {
                     found: self.cur_kind(),
                     expected: vec![
@@ -411,6 +413,7 @@ where
             }
 
             other => {
+                cold_path();
                 return Err(ParseError::UnexpectedToken {
                     found: self.cur_kind(),
                     expected: vec![Kind::IntLiteral, Kind::FloatLiteral],
@@ -598,7 +601,9 @@ where
             Kind::PrimitiveType | Kind::Identifier | Kind::KwMut => {
                 return Ok(DeclStmt::Var(Box::new_in(self.parse_var_item()?, arena)));
             }
-            _ => {}
+            _ => {
+                cold_path();
+            }
         };
 
         if self.eat(Kind::KwExtern) {
@@ -627,11 +632,14 @@ where
                 arena,
             ))),
 
-            other => shortcircuit!(ParseError::UnexpectedToken {
-                found: other,
-                expected: vec![Kind::PrimitiveType, Kind::KwFn,],
-                span: self.finish_span(start),
-            }),
+            other => {
+                cold_path();
+                shortcircuit!(ParseError::UnexpectedToken {
+                    found: other,
+                    expected: vec![Kind::PrimitiveType, Kind::KwFn,],
+                    span: self.finish_span(start),
+                })
+            }
         }
     }
 
@@ -783,7 +791,10 @@ where
 
             let op = match BinaryOperator::try_from(kind) {
                 Ok(op) => op,
-                _ => break,
+                _ => {
+                    cold_path();
+                    break;
+                }
             };
 
             // Left-binding ensures left-assoc operators group as (a-b)-c
@@ -957,6 +968,7 @@ where
             }
 
             other => {
+                cold_path();
                 shortcircuit!(ParseError::UnexpectedToken {
                     found: other,
                     expected: vec![
@@ -1393,7 +1405,7 @@ where
             Kind::Kwself => Ok(Ty::Tyself),
             Kind::KwSelf => Ok(Ty::TySelf),
 
-            c => unreachable!("{c:?}"),
+            c => unreachable!(),
         }
     }
 
@@ -1439,6 +1451,8 @@ where
             span = ident.loc;
             path_segments.push(self.parse_path_segment(Some(ident))?);
         } else {
+            cold_path(); // We mostly call the parse_path function with a root identifier
+
             let seg = self.parse_path_segment(None)?;
             span = seg.loc;
             path_segments.push(seg)
@@ -1519,7 +1533,8 @@ where
         match parse_fn(self) {
             Ok(value) => value,
             Err(err) => {
-                println!("{err:?}");
+                cold_path();
+
                 let diag = err.into_diagnostic::<'a, F>(self.file_id);
 
                 self.diagnostics.push(diag);
@@ -1643,6 +1658,8 @@ where
             return Ok(cur_token);
         }
 
+        cold_path();
+
         shortcircuit!(ParseError::UnexpectedToken {
             found: kind,
             expected: expected_kinds.to_vec(),
@@ -1659,6 +1676,8 @@ where
             self.advance();
             return Ok(cur_token);
         }
+
+        cold_path();
 
         let kind = self.cur_kind();
 
