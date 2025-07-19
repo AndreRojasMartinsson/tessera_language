@@ -9,6 +9,7 @@ use crate::{
 pub mod expr;
 pub mod item;
 pub mod literal;
+pub mod scope;
 pub mod stmt;
 pub mod types;
 pub mod utils;
