@@ -1,3 +1,4 @@
+#![feature(negative_impls)]
 #![feature(cold_path)]
 #![feature(macro_metavar_expr_concat)]
 #![allow(unused)]
