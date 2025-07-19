@@ -21,6 +21,9 @@ clap = { version = "4.5.41", features = [
 codespan-reporting = "0.12.0"
 color-eyre = "0.6.5"
 env_logger = "0.11.8"
+gxhash = "3.5.0"
+indexmap = { version = "2.10.0", features = ["rayon"] }
+indextree = { version = "4.7.4", features = ["par_iter"] }
 log = "0.4.27"
 match_deref = "0.1.2"
 memmap2 = "0.9.7"
