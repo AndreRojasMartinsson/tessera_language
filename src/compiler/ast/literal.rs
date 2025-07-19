@@ -1,4 +1,5 @@
 use crate::{choice, node};
+
 use bumpalo::boxed::Box;
 
 choice!(Literal, {

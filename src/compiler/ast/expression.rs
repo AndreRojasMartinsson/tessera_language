@@ -2,6 +2,7 @@ use bitflags::bitflags;
 use clap::Id;
 
 use bumpalo::boxed::Box;
+use bumpalo::collections::Vec;
 
 use crate::{
     atoms::KwAtom,
@@ -28,7 +29,7 @@ bitflags! {
 }
 
 node!(SourceFile, {
-    stmts: Vec<Stmt<'a>>,
+    stmts: Vec<'a, Stmt<'a>>,
 });
 
 choice!(Stmt, {
@@ -115,7 +116,7 @@ choice!(ExprEndingWithBlock, {
 
 node!(Block, {
     label: Option<Label<'a>>,
-    stmts: Vec<Stmt<'a>>,
+    stmts: Vec<'a, Stmt<'a>>,
     expr: Option<Expr<'a>>,
 });
 

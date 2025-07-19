@@ -1,9 +1,7 @@
 #![feature(string_deref_patterns)]
-use std::{
-    cell::Ref, hint::unreachable_unchecked, marker::PhantomData, ops::Neg, path, process::id, vec,
-};
+use std::{cell::Ref, hint::unreachable_unchecked, marker::PhantomData, path};
 
-use bumpalo::{Bump, boxed::Box};
+use bumpalo::{Bump, boxed::Box, collections::Vec};
 
 use clap::Id;
 use codespan_reporting::{
@@ -37,7 +35,7 @@ pub struct Parser<'a, T: Lex<'a>, F: Files<'a>> {
     arena: &'a Bump,
 
     // error handling
-    diagnostics: Vec<Diagnostic<F::FileId>>,
+    diagnostics: std::vec::Vec<Diagnostic<F::FileId>>,
     files: F,
     file_id: F::FileId,
 }
@@ -62,14 +60,14 @@ where
             files,
             file_id,
             arena,
-            diagnostics: Vec::new(),
+            diagnostics: vec![],
         }
     }
 
     /// Entry point: produce a SourceFile AST with top-level items.
     /// We loop until EOF to allow streaming parsing of multiple items.
     pub fn parse(&'a mut self) -> Result<SourceFile<'a>, Report> {
-        let mut items = vec![];
+        let mut items = bumpalo::vec![in &self.arena;];
 
         // We prime the first token since at this point cur_token is `Token::default` as laid out
         // in the constructor.
@@ -1231,7 +1229,7 @@ where
         self.expect(Kind::LBrace)?;
 
         let mut final_expr = None;
-        let mut items = vec![];
+        let mut items = bumpalo::vec![in &self.arena;];
 
         while !self.at(Kind::Eof) && !self.at(Kind::RBrace) {
             // The tail expression of a block, needs to well be a expression
@@ -1344,7 +1342,7 @@ where
     fn parse_type_path(&mut self) -> Result<TypePath<'a>> {
         let span = self.start_span();
 
-        let mut path_segments: Vec<TypePathSegment<'a>> = vec![];
+        let mut path_segments: Vec<'a, TypePathSegment<'a>> = bumpalo::vec![in &self.arena;];
 
         loop {
             if self.at(Kind::Eof) {
@@ -1433,7 +1431,8 @@ where
 
     fn parse_path(&mut self, root_identifier: Option<Identifier<'a>>) -> Result<Path<'a>> {
         let mut span: Span;
-        let mut path_segments = vec![];
+
+        let mut path_segments = bumpalo::vec![in &self.arena;];
 
         if let Some(ident) = root_identifier {
             span = ident.loc;
@@ -1550,11 +1549,13 @@ where
     {
         let span = self.start_span();
 
+        let mut nodes = bumpalo::vec![in &self.arena;];
+
         if self.at(closing_kind) {
-            return Ok(Punctuated::new(self.finish_span(span), vec![]));
+            return Ok(Punctuated::new(self.finish_span(span), nodes));
         };
 
-        let mut nodes = vec![parse_fn(self)?];
+        nodes.push(parse_fn(self)?);
 
         while self.eat(delimiter) {
             nodes.push(parse_fn(self)?);
