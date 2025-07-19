@@ -1,5 +1,4 @@
-#![feature(string_deref_patterns)]
-use std::{cell::Ref, hint::unreachable_unchecked, marker::PhantomData, path};
+use std::{cell::Ref, marker::PhantomData, path};
 
 use bumpalo::{Bump, boxed::Box, collections::Vec};
 
@@ -94,7 +93,7 @@ where
     }
 
     fn heap_alloc<V>(&self, value: V) -> Box<'a, V> {
-        Box::new_in(value, &self.arena)
+        Box::new_in(value, self.arena)
     }
 
     fn parse_statement_inner(&mut self) -> Result<Stmt<'a>> {
@@ -151,7 +150,7 @@ where
             start,
             SYNC,
             |p| p.parse_statement_inner(),
-            |span| Stmt::Decl(DeclStmt::Empty(Box::new_in(EmptyStmt::new(span), &arena))),
+            |span| Stmt::Decl(DeclStmt::Empty(Box::new_in(EmptyStmt::new(span), arena))),
         )
     }
 
@@ -191,7 +190,7 @@ where
             }
             Kind::KwFor => return self.parse_for_expr_with_lookahead(),
             // SAFETY: We checked via is_block_start that only these kinds can occur
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         };
 
         Ok(expr)
@@ -431,7 +430,7 @@ where
             Value::Int(value) => IntLiteral::new(self.finish_span(span), value),
 
             // SAFETY: We made sure value can only be a Int in parse_lit_pattern
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         };
 
         Ok(lit)
@@ -445,7 +444,7 @@ where
             Value::String(value) => StrLiteral::new(self.finish_span(span), value),
 
             // SAFETY: We made sure value can only be a Str in parse_lit_pattern
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         };
 
         Ok(lit)
@@ -459,7 +458,7 @@ where
             Value::Bool(value) => BoolLiteral::new(self.finish_span(span), value),
 
             // SAFETY: We made sure value can only be a Bool in parse_lit_pattern
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         };
 
         Ok(lit)
@@ -473,7 +472,7 @@ where
             Value::Char(value) => CharLiteral::new(self.finish_span(span), value),
 
             // SAFETY: We made sure value can only be a Char in parse_lit_pattern
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         };
 
         Ok(lit)
@@ -487,7 +486,7 @@ where
             Value::Float(value) => FloatLiteral::new(self.finish_span(span), value),
 
             // SAFETY: We made sure value can only be a Float in parse_lit_pattern
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         };
 
         Ok(lit)
@@ -1099,7 +1098,7 @@ where
                 Identifier::new(self.finish_span(span), atom),
             )),
             // SAFETY: Label kind can only have a ident value
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         }
     }
 
@@ -1159,7 +1158,7 @@ where
                 match token.value {
                     Value::Bool(value) => value,
                     // SAFETY: A bool literal can only contain a Value::Bool
-                    _ => unsafe { unreachable_unchecked() },
+                    _ => unreachable!(),
                 },
             ))),
             Kind::IntLiteral => Literal::Int(self.heap_alloc(IntLiteral::new(
@@ -1167,7 +1166,7 @@ where
                 match token.value {
                     Value::Int(value) => value,
                     // SAFETY: A bool literal can only contain a Value::Int
-                    _ => unsafe { unreachable_unchecked() },
+                    _ => unreachable!(),
                 },
             ))),
             Kind::CharLiteral => Literal::Char(self.heap_alloc(CharLiteral::new(
@@ -1175,7 +1174,7 @@ where
                 match token.value {
                     Value::Char(value) => value,
                     // SAFETY: A char literal can only contain a Value::Char
-                    _ => unsafe { unreachable_unchecked() },
+                    _ => unreachable!(),
                 },
             ))),
             Kind::FloatLiteral => Literal::Float(self.heap_alloc(FloatLiteral::new(
@@ -1183,7 +1182,7 @@ where
                 match token.value {
                     Value::Float(value) => value,
                     // SAFETY: A float literal can only contain a Value::Float
-                    _ => unsafe { unreachable_unchecked() },
+                    _ => unreachable!(),
                 },
             ))),
             Kind::StringLiteral => Literal::Str(self.heap_alloc(StrLiteral::new(
@@ -1191,11 +1190,11 @@ where
                 match token.value {
                     Value::String(value) => value,
                     // SAFETY: A string literal can only contain a Value::String
-                    _ => unsafe { unreachable_unchecked() },
+                    _ => unreachable!(),
                 },
             ))),
             // SAFETY: We checked that only the kind's above are possible here.
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         };
 
         Ok(lit)
@@ -1420,12 +1419,12 @@ where
                 atom!("float") => Ty::Float,
                 atom!("double") => Ty::Double,
                 // SAFETY: There are no other nor can exist any other primitive types
-                _ => unsafe { unreachable_unchecked() },
+                _ => unreachable!(),
             },
 
             // SAFETY: The primitive_type token kind cannot have any other
             // value other than `Ident`.
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         }
     }
 
@@ -1496,7 +1495,7 @@ where
 
             // SAFETY: The identifier token kind cannot have any other
             // value other than `Ident`.
-            c => unsafe { unreachable_unchecked() },
+            c => unreachable!(),
         }
     }
 
