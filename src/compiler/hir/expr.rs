@@ -3,7 +3,10 @@ use bumpalo::collections::Vec;
 use crate::{
     ast::{CompoundAssignmentExpr, Expr, Pattern},
     atoms::KwAtom,
-    hir::identifiers::{ExprId, StmtId},
+    hir::{
+        identifiers::{ExprId, StmtId},
+        ty::HirType,
+    },
     operator::{BinaryOperator, CompoundOperator, RangeOperator, UnaryOperator},
     span::Span,
 };
