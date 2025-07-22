@@ -1,7 +1,4 @@
-use std::{
-    cell::Ref, hint::cold_path, marker::PhantomData, os::unix::process::parent_id, path,
-    process::id,
-};
+use std::{cell::Ref, hint::cold_path, marker::PhantomData, path};
 
 use bumpalo::{Bump, boxed::Box, collections::Vec};
 
@@ -83,7 +80,7 @@ where
 
             let span = self.start_span();
 
-            items.push(self.parse_statement());
+            items.push(self.parse_top_level_statement());
         }
 
         let writer = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
@@ -98,6 +95,92 @@ where
 
     fn heap_alloc<V>(&self, value: V) -> Box<'a, V> {
         Box::new_in(value, self.arena)
+    }
+
+    fn parse_module_item(&mut self) -> Result<ModuleItem<'a>> {
+        let span = self.start_span();
+
+        self.expect(Kind::KwModule)?;
+
+        let name = self.parse_identifier()?;
+
+        let mut items = bumpalo::vec![in &self.arena;];
+
+        self.expect(Kind::LBrace)?;
+
+        loop {
+            if self.at(Kind::RBrace) || self.at(Kind::Eof) {
+                break;
+            }
+
+            let span = self.start_span();
+
+            items.push(self.parse_top_level_statement());
+        }
+
+        self.expect(Kind::RBrace)?;
+        self.expect(Kind::Semicolon)?;
+
+        Ok(ModuleItem::new(self.finish_span(span), name, items))
+    }
+
+    fn parse_top_level_statement_inner(&mut self) -> Result<TopLevelStmt<'a>> {
+        let span = self.start_span();
+
+        let stmt = match self.cur_kind() {
+            // Treat stray semicolons as empty declarations to keep AST uniform
+            Kind::KwModule => {
+                let module = self.parse_module_item()?;
+                TopLevelStmt::Module(Box::new_in(module, self.arena))
+            }
+            Kind::KwUsing => {
+                let import = self.parse_import_item()?;
+                TopLevelStmt::Import(Box::new_in(import, self.arena))
+            }
+
+            // Declaration starts: functions, constants, externs, identifiers start variable decls
+            Kind::KwFn
+            | Kind::KwPub
+            | Kind::KwConst
+            | Kind::KwExtern
+            | Kind::Identifier
+            | Kind::KwUsing
+            | Kind::PrimitiveType
+            | Kind::KwMut => {
+                let decl = self.parse_decl_stmt()?;
+                TopLevelStmt::Stmt(Box::new_in(Stmt::Decl(decl), self.arena))
+            }
+
+            // Block forms as expression statements allow constructs like `{ ... }` in ExprStmt context
+            kind if Self::is_block_start(kind) => {
+                let blk = self.parse_expr_ending_with_block()?;
+                let stmt = Stmt::Expr(ExprStmt::ExprEndingWithBlock(self.heap_alloc(blk)));
+                TopLevelStmt::Stmt(Box::new_in(stmt, self.arena))
+            }
+
+            // Fallback to generic expression statements
+            _ => {
+                let expr = self.parse_expr_statement()?;
+
+                TopLevelStmt::Stmt(Box::new_in(Stmt::Expr(expr), self.arena))
+            }
+        };
+
+        Ok(stmt)
+    }
+
+    fn parse_top_level_statement(&mut self) -> TopLevelStmt<'a> {
+        let start = self.start_span();
+        const SYNC: &[Kind] = &[Kind::Semicolon, Kind::RBrace, Kind::Eof];
+
+        let arena = self.arena;
+
+        self.recoverable(
+            start,
+            SYNC,
+            |p| p.parse_top_level_statement_inner(),
+            |span| TopLevelStmt::Empty(span),
+        )
     }
 
     fn parse_statement_inner(&mut self) -> Result<Stmt<'a>> {
@@ -223,6 +306,7 @@ where
 
         Ok(IfExpr {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             condition,
             consequence: body,
@@ -240,6 +324,7 @@ where
 
         Ok(MatchExpr {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             value,
             body,
@@ -256,6 +341,7 @@ where
 
         Ok(MatchBlock {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             match_arms: arms,
         })
@@ -509,6 +595,7 @@ where
 
         Ok(WhileExpr {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             label: None,
             condition,
@@ -538,6 +625,7 @@ where
 
         let for_in = ForInExpr {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             label: None,
             ty,
@@ -557,6 +645,7 @@ where
     ) -> Result<ForExpr<'a>> {
         let initializer = VarItem {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             modifiers: Modifiers::empty(),
             ty,
@@ -576,6 +665,7 @@ where
 
         Ok(ForExpr {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             label: None,
             initializer,
@@ -606,12 +696,7 @@ where
                 return Ok(DeclStmt::Var(Box::new_in(self.parse_var_item()?, arena)));
             }
 
-            Kind::KwUsing => {
-                return Ok(DeclStmt::Import(Box::new_in(
-                    self.parse_import_item()?,
-                    arena,
-                )));
-            }
+            Kind::KwUsing => {}
             _ => {
                 cold_path();
             }
@@ -726,6 +811,7 @@ where
 
         Ok(ExternFunc {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             parameters,
             modifiers,
@@ -752,6 +838,7 @@ where
 
         Ok(VarItem {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             modifiers,
             ty,
@@ -781,6 +868,7 @@ where
 
         Ok(ConstItem {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             modifiers,
             ty,
@@ -917,6 +1005,7 @@ where
 
         Ok(CallExpr {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             callee: lhs,
             generic_args,
@@ -1096,6 +1185,7 @@ where
 
         Ok(RefExpr {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             mutable: value.mutable,
             operand: expr,
@@ -1145,6 +1235,7 @@ where
 
         Ok(ContinueExpr {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             label,
         })
@@ -1158,6 +1249,7 @@ where
 
         Ok(BreakExpr {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             label,
         })
@@ -1288,6 +1380,7 @@ where
 
         Ok(FuncItem {
             _marker: PhantomData,
+
             loc: self.finish_span(span),
             parameters,
             body,
@@ -1372,6 +1465,14 @@ where
                 self.finish_span(span),
                 Modifiers::empty(),
             ))));
+        }
+
+        if self.eat(Kind::DotDotDot) {
+            let name = self.parse_identifier()?;
+
+            return Ok(Parameter::Variadic(self.heap_alloc(
+                VariadicParameter::new(self.finish_span(span), ty, Modifiers::empty(), name),
+            )));
         }
 
         let name = self.parse_identifier()?;
