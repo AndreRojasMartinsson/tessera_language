@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod errors;
 pub mod hir;
+pub mod hir_builder;
 pub mod lexer;
 pub mod operator;
 pub mod parser;

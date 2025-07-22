@@ -19,7 +19,7 @@ mod ty;
 
 pub struct Hir<'hir> {
     pub exprs: Vec<'hir, HirExpr<'hir>>,
-    pub stmts: Vec<'hir, HirStmt>,
+    pub stmts: Vec<'hir, HirStmt<'hir>>,
     pub items: Vec<'hir, HirItem<'hir>>,
     arena: &'hir Bump,
 }
@@ -40,7 +40,7 @@ impl<'hir> Hir<'hir> {
         ExprId(idx)
     }
 
-    pub fn alloc_stmt(&mut self, stmt: HirStmt) -> StmtId {
+    pub fn alloc_stmt(&mut self, stmt: HirStmt<'hir>) -> StmtId {
         let idx = self.stmts.len();
         self.stmts.push(stmt);
         StmtId(idx)
