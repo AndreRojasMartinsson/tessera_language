@@ -5,6 +5,7 @@ use bumpalo::boxed::Box;
 use bumpalo::collections::Vec;
 
 use crate::{
+    ast::{Stmt, VarItem},
     atoms::KwAtom,
     choice, node,
     operator::{BinaryOperator, CompoundOperator, RangeOperator, UnaryOperator},
@@ -19,7 +20,7 @@ use super::{
 };
 
 bitflags! {
-    #[derive(Debug, PartialEq, PartialOrd, Clone)]
+    #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
     pub struct Modifiers: u8 {
         const MUTABLE = 1;
         const CONST = 1 << 1;
@@ -27,71 +28,6 @@ bitflags! {
         const REFERENCE = 1 << 3;
     }
 }
-
-node!(SourceFile, {
-    stmts: Vec<'a, Stmt<'a>>,
-});
-
-choice!(Stmt, {
-    Decl(DeclStmt<'a>),
-    Expr(ExprStmt<'a>),
-    Empty(Span),
-});
-
-choice!(DeclStmt, {
-    Const(Box<'a, ConstItem<'a>>),
-    Empty(Box<'a, EmptyStmt<'a>>),
-    Import(Box<'a, ImportItem<'a>>),
-    Func(Box<'a, FuncItem<'a>>),
-    Extern(Box<'a, ExternFunc<'a>>),
-    Var(Box<'a, VarItem<'a>>),
-});
-
-node!(ImportItem, {
-    tree: ImportTree<'a>,
-});
-
-choice!(ImportTree, {
-    Path(Box<'a, ImportPath<'a>>),
-    Group(Box<'a, ImportGroup<'a>>),
-    Name(Box<'a, Identifier<'a>>),
-    Glob
-});
-
-node!(ImportGroup, {
-    items: Punctuated<'a, ImportTree<'a>>
-});
-
-node!(ImportPath, {
-    ident: Identifier<'a>,
-    tree: ImportTree<'a>,
-});
-
-node!(EmptyStmt, {});
-
-node!(ConstItem, {
-    modifiers: Modifiers,
-    ty: Type<'a>,
-    name: Identifier<'a>,
-    value: Expr<'a>,
-});
-
-node!(ExternFunc, {
-    modifiers: Modifiers,
-    generic_args: Option<GenericArgs<'a>>,
-    return_ty: Type<'a>,
-    name: Identifier<'a>,
-    parameters: Punctuated<'a, Parameter<'a>>,
-});
-
-node!(FuncItem, {
-    modifiers: Modifiers,
-    generic_args: Option<GenericArgs<'a>>,
-    return_ty: Type<'a>,
-    name: Identifier<'a>,
-    parameters: Punctuated<'a, Parameter<'a>>,
-    body: Block<'a>
-});
 
 choice!(Parameter, {
     Ident(Box<'a, IdentParameter<'a>>),
@@ -112,13 +48,6 @@ node!(SelfParameter, {
 node!(IdentParameter, {
     ty: Type<'a>,
     name: Identifier<'a>,
-});
-
-node!(VarItem, {
-    modifiers: Modifiers,
-    ty: Type<'a>,
-    name: Identifier<'a>,
-    value: Option<Expr<'a>>,
 });
 
 choice!(ExprStmt, {
