@@ -1,7 +1,30 @@
-using std:io;
+const i32 A := 5;
+const i32 B := 10;
+const i32 C := A + B;
 
-fn i32 main(&self, i32 anyways) {
-  io:println("Hello, world!");
+extern fn void printf(str format_spec, str ...args);
+
+module math {
+  pub fn float add(float a, float b) {
+    |> a + b;
+  }
+};
+
+fn i32 main() {
+  i32 a := 5;
+  i32 b := 10;
+
+  float result := math:add(a as float, b as float);
+
+  printf("Result (5 + 10) = %f", result);
 
   |> 0;
 }
+
+//using std:io;
+//
+//fn i32 main(&self, i32 anyways) {
+//  io:println("Hello, world!");
+//
+//  |> 0;
+//}
