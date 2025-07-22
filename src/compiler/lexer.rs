@@ -415,7 +415,7 @@ impl<'a> Lexer<'a> {
             atom!("ref") => Kind::KwRef,
             atom!("while") => Kind::KwWhile,
             atom!("using") => Kind::KwUsing,
-            atom!("crate") => Kind::KwCrate,
+            atom!("module") => Kind::KwModule,
             atom!("super") => Kind::KwSuper,
             atom!("self") => Kind::Kwself,
             atom!("Self") => Kind::KwSelf,

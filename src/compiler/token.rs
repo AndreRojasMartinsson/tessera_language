@@ -26,6 +26,7 @@ pub enum Kind {
     KwPub,
     KwUsing,
     KwRef,
+    KwModule,
     KwReturn,
     KwWhile,
     KwCrate,
